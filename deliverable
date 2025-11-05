@@ -1,0 +1,245 @@
+# CMPSC 472 – Operating Systems (Section 001)
+
+**Professor:** Janghoon Yang  
+**Author:** Jomiloju Odumosu  
+
+## Project 1: MapReduce Systems for Parallel Sorting and Max-Value Aggregation with Constrained Memory
+
+**GitHub Link for Code:** [https://github.com/jto5108/cmpsc472-project1](https://github.com/jto5108/cmpsc472-project1)
+
+---
+
+## 1. Project Description
+
+### Overview of the Two MapReduce-Style Tasks
+
+In this project, I implemented two MapReduce-style systems on a single machine: **Parallel Sorting** and **Max-Value Aggregation with Constrained Shared Memory**. Both tasks follow the MapReduce model:
+
+- **Map phase:** data is processed in parallel by several workers.  
+- **Reduce phase:** results from workers are combined by a reducer.
+
+**Parallel Sorting:**  
+- Input: Large array of integers.  
+- Map phase: Array divided into chunks, each sorted by a worker (threads or processes).  
+- Reduce phase: Merges sorted chunks into a final array.  
+
+**Max-Value Aggregation:**  
+- Each worker computes the local maximum of its chunk.  
+- Workers share a single memory buffer storing one value (global max).  
+- Synchronization ensures only one worker updates the value at a time.
+
+### Why I Considered Multithreading, Multiprocessing, and Synchronization
+
+- **Multithreading:** Lightweight, shared memory access; limited by Python’s GIL.  
+- **Multiprocessing:** True parallelism across cores; requires IPC.  
+- **Synchronization:** Ensures correctness when updating shared data, preventing race conditions.
+
+---
+
+## 2. Instructions
+
+### Parallel Sorting
+```bash
+-python mapreduce_sort.py --mode thread --workers 4 --size 131072
+-python mapreduce_sort.py --mode process --workers 8 --size 32
+
+### Max-Value Aggregation
+-python max_aggregation.py --mode thread --workers 4 --size 131072
+-python max_aggregation.py --mode process --workers 8 --size 32
+
+
+### Parameters:
+
+--mode: thread or process
+
+--workers: number of workers (1, 2, 4, or 8)
+
+--size: size of input array
+
+### Outputs:
+
+-Mode, number of workers, input size
+
+-Map time, reduce time, total time
+
+-Memory usage before and after execution
+
+-Final output (sorted list or global max)
+
+### Testing:
+
+-Small arrays (size 32) for correctness
+
+-Large arrays (size 131,072) for performance evaluation
+
+### 3. Structure of the Code
+### Parallel Sorting System Diagram
+Main Process
+ ├── Worker 1 (Thread/Process): Sort Chunk 1
+ ├── Worker 2 (Thread/Process): Sort Chunk 2
+ ├── Worker 3 (Thread/Process): Sort Chunk 3
+ └── Worker N (Thread/Process): Sort Chunk N
+      Reducer (Main): Merge all sorted chunks via heapq.merge
+
+
+-Threads share array directly
+
+-Processes send sorted chunks via multiprocessing.Queue
+
+Max-Value Aggregation System Diagram
+Main Process
+ ├── Worker 1 --> local_max --> try update shared buffer
+ ├── Worker 2 --> local_max --> try update shared buffer
+ ├── Worker 3 --> local_max --> try update shared buffer
+ └── Worker N --> local_max --> try update shared buffer
+      Reducer (Main): Reads final global_max from shared buffer
+
+
+-Threads: shared list [value] + threading.Lock
+
+-Processes: multiprocessing.Value + Lock
+
+## MapReduce Support:
+
+-Map phase: parallel workers independently process data
+
+-Intermediate results: sorted chunks or local maxima
+
+-Reduce phase: main process merges or aggregates results
+
+-Mimics MapReduce without distributed infrastructure
+
+### 4. Implementation Details
+
+## Libraries and Tools:
+
+-threading, multiprocessing, heapq, time, argparse, random, psutil, sys
+
+-typing for type hints
+
+## Process/Thread Management:
+
+-Threads: threading.Thread + join()
+
+-Processes: multiprocessing.Process + shared Queue or Value
+
+## IPC Mechanisms:
+
+-Sorting: multiprocessing.Queue to send sorted chunks
+
+-Max aggregation: multiprocessing.Value to store the global maximum
+
+## Threading Strategy:
+
+-Manual thread creation to control chunk distribution, sorting, and joining
+
+## Synchronization Strategy:
+
+-Threads: threading.Lock for critical sections
+
+-Processes: multiprocessing.Lock for shared Value updates
+
+-Guarantees correctness; prevents race conditions
+
+### 5. Performance Evaluation
+-Correctness Checks (Input Size = 32)
+
+-Both tasks produced correct outputs matching Python’s built-in sorted() and max()
+
+-Execution times <0.002s, memory changes negligible
+
+-Insert small-size execution output here:
+    -mapreduce_sort.py --mode thread --workers 2 --size 32 MODE=thread workers=2 size=32 map_time_s: 0.000413 reduce_time_s: 0.000025 total_time_s: 0.000439 mem_before_mb: 15.50 mem_after_mb: 15.75 delta_mb: 0.25 
+    -mapreduce_sort.py --mode thread --workers 8 --size 131072 MODE=thread workers=8 size=131072 map_time_s: 0.018060 reduce_time_s: 0.026952 total_time_s: 0.045013 mem_before_mb: 20.50 mem_after_mb: 22.73 delta_mb: 2.23
+    -max_aggregation.py --mode thread --workers 1 --size 32 MODE=thread workers=1 size=32 map_time_s (incl updates): 0.000236 total_time_s: 0.000236 mem_before_mb: 15.38 mem_after_mb: 15.50 delta_mb: 0.12 global_max: 990382744
+    -max_aggregation.py --mode thread --workers 4 --size 32 MODE=thread workers=4 size=32 map_time_s (incl updates): 0.000598 total_time_s: 0.000599 mem_before_mb: 15.38 mem_after_mb: 15.50 delta_mb: 0.12 global_max: 812525487
+
+##Performance Assessment (Input Size = 131,072) 
+
+  -I next ran performance tests on a much larger dataset (131,072 integers). 
+  -Below are the summarized results for the thread-based version of both tasks. 
+
+##Parallel Sorting Results 
+
+| **Workers** | **Map (s)** | **Reduce (s)** | **Total (s)** | **Δ Mem (MB)** |
+| ----------- | ----------- | -------------- | ------------- | -------------- |
+| 1           | 0.039111    | 0.010033       | 0.049146      | +2.89          |
+| 2           | 0.019386    | 0.017016       | 0.036403      | +2.77          |
+| 4           | 0.017827    | 0.021309       | 0.039138      | +2.33          |
+| 8           | 0.018060    | 0.026952       | 0.045013      | +2.23          |
+
+##Max-Value Aggregation Results
+| **Workers** | **Map + Update (s)** | **Total (s)** | **Δ Mem (MB)** | **Global Max** |
+| ----------- | -------------------- | ------------- | -------------- | -------------- |
+| 1           | 0.004333             | 0.004333      | +0.20          | 999985138      |
+| 2           | 0.004172             | 0.004173      | +0.64          | 999984119      |
+| 4           | 0.004170             | 0.004171      | +0.39          | 999991328      |
+| 8           | 0.004563             | 0.004564      | +0.25          | 999981169      |
+
+##Timing Comparisons and Discussion 
+
+#Parallel Sorting 
+
+-For sorting, I noticed that going from 1 to 2 workers significantly reduced total time from 0.049 s to 0.036 s, showing a real benefit from parallelization. 
+ -However, increasing the number of threads beyond 2 did not continue to improve speed. 
+ -At 4 and 8 workers, the total time slightly increased again (0.039 s → 0.045 s), likely due to synchronization overhead and the Global Interpreter Lock (GIL) limiting true parallel execution in CPU-bound operations. 
+
+-Memory usage grew modestly (around 2–3 MB increase), which is expected as each worker holds its own sorted subarray before merging. 
+
+#Max-Value Aggregation 
+
+-The aggregation task showed very stable timing across all worker counts. 
+ -Even at 8 threads, execution time stayed around 0.0045 seconds. 
+ -Because each thread had to acquire a lock to update the shared global maximum, more threads introduced slight contention but no major slowdown. 
+ -This consistency shows that synchronization worked correctly and efficiently for the simple shared-integer update model. 
+
+##Synchronization Discussion 
+
+-Synchronization played a critical role in the Max-Value task. 
+ -Without a lock, multiple threads would race to update the global maximum, producing inconsistent or incorrect results. 
+ -Using a threading.Lock ensures that only one thread updates the value at a time, maintaining accuracy. 
+ -However, it also revealed how synchronization limits scalability—beyond 4 threads, the performance gain flattened due to the sequential nature of the critical section. 
+
+-For sorting, synchronization was minimal since each thread worked on independent chunks, but the GIL still prevented true multi-core parallelism, explaining why performance didn’t continue improving with more threads. 
+
+ 
+
+### 6. Conclusion 
+
+##Key Findings 
+
+-From my results, I found that multithreading improved performance compared to a single thread when using a small number of workers, especially for the sorting task. 
+ -However, increasing threads beyond 2 to 4 did not continue to improve performance because of Python’s GIL and the overhead of managing multiple threads. 
+ -For aggregation, the results were highly consistent across all worker counts, proving that my synchronization design-maintained correctness while keeping the system lightweight. 
+
+-I also observed that memory growth remained small (usually 2–3 MB for large inputs), showing that my approach was efficient in both time and space. 
+
+## Challenges Faced 
+
+-Some challenges I faced included: 
+
+  -Managing synchronization correctly to avoid race conditions when updating the shared global maximum. 
+
+  -Balancing the number of threads to find an optimal point between speedup and overhead. 
+
+  Measuring execution time precisely for small workloads where timing differences were minimal. 
+
+  Dealing with Python’s inherent threading limitations on CPU-bound tasks. 
+
+##Limitations and Possible Improvements 
+
+-One limitation is that all experiments were done using threads only. Running the same tasks with multiprocessing would show true parallel execution across cores. 
+ -Future improvements could include: 
+
+    -Implementing a multiprocessing version for comparison. 
+
+    -Using shared memory arrays or multiprocessing.Queue to reduce data transfer overhead. 
+
+    -Adding CPU utilization tracking to quantify parallel efficiency. 
+
+    -Integrating thread pools (concurrent.futures.ThreadPoolExecutor) for more scalable and cleaner worker management. 
+
+-Overall, this project deepened my understanding of how MapReduce-style computation, parallelism, and synchronization interact in practice. 
+ -It showed me that parallel speedup depends not just on splitting work but also on how efficiently threads or processes share and synchronize data. 
+
+ 
