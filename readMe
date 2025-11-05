@@ -1,1 +1,41 @@
 
+## 📘 Project Overview
+
+This project implements two **MapReduce-style systems** using **multithreading** in Python to demonstrate core **operating system concepts** such as parallelism, inter-process communication (IPC), and synchronization.
+
+The system runs entirely on a single host machine and simulates a simplified MapReduce workflow using local parallel workers.  
+Each task includes a **Map phase** (parallel computation) and a **Reduce phase** (aggregation of results).
+
+---
+
+## ⚙️ Tasks Implemented
+
+### **1. Parallel Sorting**
+- **Goal:** Sort a large array of integers using parallel workers.
+- **Map Phase:** Divide the input array into equal chunks; each worker sorts its chunk using Quick Sort or Merge Sort.
+- **Reduce Phase:** Merge all sorted chunks into one final sorted list.
+- **Output:** Displays timing and memory metrics for 1, 2, 4, and 8 workers.
+
+### **2. Max-Value Aggregation with Constrained Shared Memory**
+- **Goal:** Find the global maximum value from a large dataset.
+- **Constraint:** Shared memory only holds one integer (the global maximum).
+- **Map Phase:** Each worker computes a local max and tries to update the shared value.
+- **Reduce Phase:** The reducer reads the final maximum.
+- **Synchronization:** Ensures only one worker updates the shared memory at a time using `threading.Lock()`.
+
+---
+
+## 🧩 Why Multithreading and Synchronization?
+
+- **Multithreading** allows multiple workers to process data concurrently, improving performance on multi-core systems.
+- **Synchronization** ensures correctness when shared data (like a global max) is accessed or updated by multiple threads.
+- **MapReduce** provides a structured model for dividing work and combining results efficiently.
+
+---
+
+## 🖥️ How to Run
+
+### **1. Clone the Repository**
+```bash
+git clone https://github.com/<your-username>/cmpsc472-project1.git
+cd cmpsc472-project1
