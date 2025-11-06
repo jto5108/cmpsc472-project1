@@ -113,33 +113,77 @@ Main Process
 
 ## Libraries and Tools:
 
--threading, multiprocessing, heapq, time, argparse, random, psutil, sys
+ -The implementation was entirely written in Python using only standard libraries, except for psutil (used for measuring memory usage).
+ -Below is a summary of the libraries and their roles:
 
--typing for type hints
+  -threading – used to create lightweight threads for shared-memory parallelism.
 
-## Process/Thread Management:
+  -multiprocessing – used to create separate processes for true parallelism across CPU cores.
 
--Threads: threading.Thread + join()
+  -heapq – used to merge multiple sorted chunks efficiently during the reduce phase of the sorting task.
 
--Processes: multiprocessing.Process + shared Queue or Value
+  -argparse – used for command-line argument handling, making the scripts flexible to run with different modes, sizes, and worker counts.
 
-## IPC Mechanisms:
+  -time – used to measure execution times for each phase (map, reduce, total).
 
--Sorting: multiprocessing.Queue to send sorted chunks
+  -random – used to generate random integer arrays for input data.
 
--Max aggregation: multiprocessing.Value to store the global maximum
+  -psutil – used to record memory usage before and after execution.
 
-## Threading Strategy:
+  -typing – added for cleaner function signatures and readability.
+##Process and Thread Management
 
--Manual thread creation to control chunk distribution, sorting, and joining
+-In my project, I used both threads and processes to parallelize work depending on the selected mode.
 
-## Synchronization Strategy:
+-For thread-based parallelism, I relied on the threading module in Python. Each worker was created manually using threading.Thread, where I could pass the worker’s function and its arguments (i.e., start index, end index, and the shared result list). After starting all threads, I used the .join() method to make sure the main thread waited for all workers to complete before moving on to the reduce phase. This ensured proper synchronization and avoided partial results.
 
--Threads: threading.Lock for critical sections
+-Threads run in the same memory space, which made data sharing simple — workers directly accessed portions of the same input list without needing inter-process communication. However, due to Python’s Global Interpreter Lock (GIL), true CPU parallelism is limited. Despite that, I still observed performance improvements in I/O-like or chunk-isolated tasks like sorting since each worker could operate independently.
 
--Processes: multiprocessing.Lock for shared Value updates
+-For process-based parallelism, I used multiprocessing.Process to achieve real parallelism across multiple CPU cores. Each process has its own separate memory space, so workers cannot directly share variables. To handle this, I used IPC (Inter-Process Communication) through a multiprocessing.Queue or multiprocessing.Value.
 
--Guarantees correctness; prevents race conditions
+-For sorting, each worker process sorted its assigned chunk and then sent the sorted result back to the main process through a Queue.
+
+-For max aggregation, workers wrote updates to a single shared multiprocessing.Value, which acted as the global maximum.
+
+-Each process was started, executed its assigned work, and then joined. This manual control helped me manage worker lifecycle precisely and ensured deterministic execution order during testing.
+
+##IPC Mechanisms
+
+-Since processes do not share memory by default, I had to carefully choose suitable IPC (Inter-Process Communication) mechanisms to exchange data efficiently.
+
+#For the Sorting Task:
+
+-I used a multiprocessing.Queue, which allows multiple processes to send Python objects (in this case, sorted lists) back to the main process safely. Each worker placed its sorted chunk into the queue, and the reducer collected all chunks by reading from it. The Queue automatically handles serialization (pickling/unpickling), which simplified data transfer between processes.
+
+-Although this introduces slight overhead compared to shared memory, it made the design more robust and modular — each process worked independently and communicated only through the queue, similar to how distributed MapReduce workers would exchange intermediate results in a cluster environment.
+
+#For the Max Aggregation Task:
+
+-I used a multiprocessing.Value, a shared memory object that stores a single variable accessible by multiple processes. In my case, it stored the current global maximum. Each worker calculated its local maximum and, with a lock, compared and updated the shared Value if its local maximum was greater.
+
+-This approach simulates constrained shared memory conditions where only one global value can be updated, and synchronization ensures consistency across processes. It was a simple but effective design that demonstrated race condition prevention through locking.
+
+#Threading Strategy
+
+-I chose manual thread creation rather than using a pre-built thread pool (like concurrent.futures.ThreadPoolExecutor) because I wanted full visibility and control over how data chunks were divided and assigned. This also allowed me to precisely measure how thread count affected timing and memory usage.
+
+-Each thread was responsible for sorting or scanning a specific portion of the data, determined by the chunk indices I computed using a helper function. This gave me flexibility to adjust chunk sizes and number of workers easily without changing the underlying thread logic.
+
+-Using manual threads also made it easier to handle synchronization and result collection explicitly, which was useful for understanding low-level behavior of Python threads in a parallel system.
+
+#Synchronization Strategy
+
+-Synchronization was critical to ensure data correctness and consistency, especially in the Max-Value Aggregation task where multiple workers attempted to modify the same shared variable concurrently.
+
+-Threads: I used a threading.Lock to create a critical section where only one thread could check and update the shared maximum at a time. This prevented race conditions — situations where two threads might read and update the shared variable simultaneously, causing incorrect results.
+
+-Processes: For multiprocessing, I used multiprocessing.Lock, which works across process boundaries. This ensured that even though processes run in separate memory spaces, only one process could update the shared multiprocessing.Value at a time.
+
+-The locks were always acquired using a context manager (with lock:), which automatically handles acquiring and releasing, reducing the chance of deadlocks.
+
+-Although synchronization slightly increased execution time when many workers were active, it guaranteed correctness, which was the main goal. Without it, test results often produced inconsistent global maxima.
+
+-Overall, the synchronization design in my implementation achieved a balance between parallelism and safety. It demonstrated how even simple locks can maintain correctness in a concurrent environment but also how they can limit scalability when contention increases.
 
 ### 5. Performance Evaluation
 -Correctness Checks (Input Size = 32)
